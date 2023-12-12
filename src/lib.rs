@@ -50,8 +50,20 @@ pub fn execute(mut program: String, rules: &[Rule]) -> String {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use regex::Regex;
+
     #[test]
     fn it_works() {
-        assert_eq!(3, 3);
+        assert_eq!(
+            execute(
+                "Hello!".into(),
+                &[Rule::Regex {
+                    pattern: Regex::new("ello").unwrap(),
+                    replacement: "i".into()
+                }]
+            ),
+            "Hi!"
+        )
     }
 }
