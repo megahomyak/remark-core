@@ -153,4 +153,20 @@ mod tests {
         execute(&mut context);
         assert_eq!(context.program, "5 4 3 2 1");
     }
+
+    #[test]
+    fn no_matches() {
+        let mut context = ExecutionContext {
+            rules: [
+                Rule::Regex {
+                    pattern: Regex::new(r"abc").unwrap(),
+                    replacement: "def".into(),
+                },
+            ]
+            .into(),
+            program: "Hello, world!".into(),
+        };
+        execute(&mut context);
+        assert_eq!(context.program, "Hello, world!");
+    }
 }
