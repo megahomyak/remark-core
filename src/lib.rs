@@ -130,8 +130,8 @@ mod tests {
                 Rule::Builtin {
                     pattern: Regex::new(r"\(minus (\d+) (\d+)\)").unwrap(),
                     replacer: Box::new(|captures: &regex::Captures| {
-                        let minuend: u64 = captures.get(1).unwrap().as_str().parse().unwrap();
-                        let subtrahend: u64 = captures.get(2).unwrap().as_str().parse().unwrap();
+                        let minuend: usize = captures.get(1).unwrap().as_str().parse().unwrap();
+                        let subtrahend: usize = captures.get(2).unwrap().as_str().parse().unwrap();
                         ReplacementResult {
                             new_rule: None,
                             substitution: format!("{}", minuend - subtrahend),
