@@ -12,6 +12,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "function_string_builder"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "60eac370203dfaed34ecb6c5004282c899cc2119f699c9659fdf0aa884e7df09"
+
+[[package]]
 name = "memchr"
 version = "2.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -50,5 +56,6 @@ checksum = "c08c74e62047bb2de4ff487b251e4a92e24f48745648451635cec7d591162d9f"
 name = "remark"
 version = "0.1.0"
 dependencies = [
+ "function_string_builder",
  "regex",
 ]
