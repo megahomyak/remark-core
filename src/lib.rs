@@ -157,12 +157,10 @@ mod tests {
     #[test]
     fn no_matches() {
         let mut context = ExecutionContext {
-            rules: [
-                Rule::Regex {
-                    pattern: Regex::new(r"abc").unwrap(),
-                    replacement: "def".into(),
-                },
-            ]
+            rules: [Rule::Regex {
+                pattern: Regex::new(r"abc").unwrap(),
+                replacement: "def".into(),
+            }]
             .into(),
             program: "Hello, world!".into(),
         };
@@ -175,10 +173,16 @@ mod tests {
         let mut context = ExecutionContext {
             rules: [
                 Rule::Builtin {
-                    pattern: Regex::new(r"\(reverse ").unwrap(),
-                    replacer: |captures: &regex::Captures| {
-                        captures.get()
-                    },
+                    pattern: Regex::new(r"\(reverse ((?:\\\)|[^)])*[^\\])\)").unwrap(),
+                    replacer: Box::new(|captures: &regex::Captures| {
+                        use unicode_segmentation::UnicodeSegmentation;
+                        let substitution: String =
+                            captures.get(1).unwrap().as_str().graphemes(true).collect();
+                        ReplacementResult {
+                            new_rule: None,
+                            substitution,
+                        }
+                    }),
                 },
                 Rule::Regex {
                     pattern: Regex::new(r"abc").unwrap(),
