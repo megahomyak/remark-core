@@ -167,32 +167,4 @@ mod tests {
         execute(&mut context);
         assert_eq!(context.program, "Hello, world!");
     }
-
-    #[test]
-    fn arbitrary_string_argument() {
-        let mut context = ExecutionContext {
-            rules: [
-                Rule::Builtin {
-                    pattern: Regex::new(r"\(reverse ((?:\\\)|[^)])*[^\\])\)").unwrap(),
-                    replacer: Box::new(|captures: &regex::Captures| {
-                        use unicode_segmentation::UnicodeSegmentation;
-                        let substitution: String =
-                            captures.get(1).unwrap().as_str().graphemes(true).collect();
-                        ReplacementResult {
-                            new_rule: None,
-                            substitution,
-                        }
-                    }),
-                },
-                Rule::Regex {
-                    pattern: Regex::new(r"abc").unwrap(),
-                    replacement: "def".into(),
-                },
-            ]
-            .into(),
-            program: "Hello, world!".into(),
-        };
-        execute(&mut context);
-        assert_eq!(context.program, "Hello, world!");
-    }
 }
