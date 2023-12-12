@@ -2,8 +2,9 @@
 name = "remarklib"
 version = "0.2.0"
 edition = "2021"
-description = "Core of Remark the programming language"
+description = "The core of the Remark programming language"
 license = "MIT"
+homepage = "https://github.com/megahomyak/remarklib"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
