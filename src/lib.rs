@@ -169,4 +169,26 @@ mod tests {
         execute(&mut context);
         assert_eq!(context.program, "Hello, world!");
     }
+
+    #[test]
+    fn arbitrary_string_argument() {
+        let mut context = ExecutionContext {
+            rules: [
+                Rule::Builtin {
+                    pattern: Regex::new(todo!("reverse")).unwrap(),
+                    replacer: |captures: &regex::Captures| {
+                        captures.get()
+                    },
+                },
+                Rule::Regex {
+                    pattern: Regex::new(r"abc").unwrap(),
+                    replacement: "def".into(),
+                },
+            ]
+            .into(),
+            program: "Hello, world!".into(),
+        };
+        execute(&mut context);
+        assert_eq!(context.program, "Hello, world!");
+    }
 }
