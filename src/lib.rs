@@ -68,7 +68,6 @@ impl Rule {
 }
 
 pub struct ExecutionContext {
-    pub program: String,
     pub rules: Vec<Rule>,
 }
 
@@ -77,17 +76,17 @@ enum MatchingStatus {
     Matched { new_rule: Option<Rule> },
 }
 
-pub fn execute(context: &mut ExecutionContext) {
+pub fn execute(context: &mut ExecutionContext, mut program: String) -> String {
     loop {
         let mut match_status = MatchingStatus::NoneMatched;
         for rule in context.rules.iter().rev() {
-            match rule.process(&context.program) {
+            match rule.process(&program) {
                 SubstitutionResult::Success {
                     new_rule,
                     new_program,
                 } => {
                     match_status = MatchingStatus::Matched { new_rule };
-                    context.program = new_program;
+                    program = new_program;
                     break;
                 }
                 SubstitutionResult::InputNotMatched => (),
@@ -102,6 +101,7 @@ pub fn execute(context: &mut ExecutionContext) {
             MatchingStatus::NoneMatched => break,
         }
     }
+    program
 }
 
 #[cfg(test)]
@@ -117,10 +117,8 @@ mod tests {
                 replacement: "i".into(),
             }]
             .into(),
-            program: "Hello!".into(),
         };
-        execute(&mut context);
-        assert_eq!(context.program, "Hi!");
+        assert_eq!(execute(&mut context, "Hello!".into()), "Hi!");
     }
 
     #[test]
@@ -148,10 +146,8 @@ mod tests {
                 },
             ]
             .into(),
-            program: "(countdown 5)".into(),
         };
-        execute(&mut context);
-        assert_eq!(context.program, "5 4 3 2 1");
+        assert_eq!(execute(&mut context, "(countdown 5)".into()), "5 4 3 2 1");
     }
 
     #[test]
@@ -162,9 +158,10 @@ mod tests {
                 replacement: "def".into(),
             }]
             .into(),
-            program: "Hello, world!".into(),
         };
-        execute(&mut context);
-        assert_eq!(context.program, "Hello, world!");
+        assert_eq!(
+            execute(&mut context, "Hello, world!".into()),
+            "Hello, world!"
+        );
     }
 }
