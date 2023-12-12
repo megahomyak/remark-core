@@ -143,14 +143,14 @@ mod tests {
                     replacement: "$1 (countdown (minus $1 1))".into(),
                 },
                 Rule::Regex {
-                    pattern: Regex::new(r"\(countdown 0\)").unwrap(),
-                    replacement: "0".into(),
+                    pattern: Regex::new(r"\(countdown 1\)").unwrap(),
+                    replacement: "1".into(),
                 },
             ]
             .into(),
             program: "(countdown 5)".into(),
         };
         execute(&mut context);
-        assert_eq!(context.program, "5 4 3 2 1 0");
+        assert_eq!(context.program, "5 4 3 2 1");
     }
 }
