@@ -41,7 +41,7 @@ impl Rule {
             } => {
                 if pattern.is_match(input) {
                     SubstitutionResult::Success {
-                        new_program: pattern.replace(input, &replacement[..]).to_string(),
+                        new_program: pattern.replace(input, replacement).to_string(),
                         new_rule: None,
                     }
                 } else {
@@ -101,6 +101,7 @@ pub fn execute(context: &mut ExecutionContext) {
             }
             MatchingStatus::NoneMatched => break,
         }
+        break;
     }
 }
 
