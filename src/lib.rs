@@ -101,7 +101,6 @@ pub fn execute(context: &mut ExecutionContext) {
             }
             MatchingStatus::NoneMatched => break,
         }
-        break;
     }
 }
 
@@ -129,7 +128,7 @@ mod tests {
         let mut context = ExecutionContext {
             rules: [
                 Rule::Builtin {
-                    pattern: Regex::new(r"(minus \d+ \d+)").unwrap(),
+                    pattern: Regex::new(r"\(minus (\d+) (\d+)\)").unwrap(),
                     replacer: Box::new(|captures: &regex::Captures| {
                         let minuend: u64 = captures.get(1).unwrap().as_str().parse().unwrap();
                         let subtrahend: u64 = captures.get(2).unwrap().as_str().parse().unwrap();
@@ -140,18 +139,18 @@ mod tests {
                     }),
                 },
                 Rule::Regex {
-                    pattern: Regex::new(r"(countdown \d+)").unwrap(),
+                    pattern: Regex::new(r"\(countdown (\d+)\)").unwrap(),
                     replacement: "$1 (countdown (minus $1 1))".into(),
                 },
                 Rule::Regex {
-                    pattern: Regex::new(r"(countdown 0)").unwrap(),
-                    replacement: "".into(),
+                    pattern: Regex::new(r"\(countdown 0\)").unwrap(),
+                    replacement: "0".into(),
                 },
             ]
             .into(),
             program: "(countdown 5)".into(),
         };
         execute(&mut context);
-        assert_eq!(context.program, "Hi!");
+        assert_eq!(context.program, "5 4 3 2 1 0");
     }
 }
