@@ -12,22 +12,22 @@ pub struct ReplacementResult {
 }
 
 pub trait Replacer {
-    fn replace(&self, captures: &regex::Captures) -> ReplacementResult;
+    fn replace(&self, captures: &fancy_regex::Captures) -> ReplacementResult;
 }
 
-impl<T: Fn(&regex::Captures) -> ReplacementResult> Replacer for T {
-    fn replace(&self, captures: &regex::Captures) -> ReplacementResult {
+impl<T: Fn(&fancy_regex::Captures) -> ReplacementResult> Replacer for T {
+    fn replace(&self, captures: &fancy_regex::Captures) -> ReplacementResult {
         self(captures)
     }
 }
 
 pub enum Rule {
     Regex {
-        pattern: regex::Regex,
+        pattern: fancy_regex::Regex,
         replacement: String,
     },
     Builtin {
-        pattern: regex::Regex,
+        pattern: fancy_regex::Regex,
         replacer: Box<dyn Replacer>,
     },
 }
@@ -39,7 +39,7 @@ impl Rule {
                 pattern,
                 replacement,
             } => {
-                if pattern.is_match(input) {
+                if pattern.is_match(input).unwrap() {
                     SubstitutionResult::Success {
                         new_program: pattern.replace(input, replacement).to_string(),
                         new_rule: None,
@@ -48,7 +48,7 @@ impl Rule {
                     SubstitutionResult::InputNotMatched
                 }
             }
-            Self::Builtin { pattern, replacer } => match pattern.captures(input) {
+            Self::Builtin { pattern, replacer } => match pattern.captures(input).unwrap() {
                 None => SubstitutionResult::InputNotMatched,
                 Some(captures) => {
                     let execution_result = replacer.replace(&captures);
@@ -107,7 +107,7 @@ pub fn execute(context: &mut ExecutionContext) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use regex::Regex;
+    use fancy_regex::Regex;
 
     #[test]
     fn hello() {
@@ -129,7 +129,7 @@ mod tests {
             rules: [
                 Rule::Builtin {
                     pattern: Regex::new(r"\(minus (\d+) (\d+)\)").unwrap(),
-                    replacer: Box::new(|captures: &regex::Captures| {
+                    replacer: Box::new(|captures: &fancy_regex::Captures| {
                         let minuend: u64 = captures.get(1).unwrap().as_str().parse().unwrap();
                         let subtrahend: u64 = captures.get(2).unwrap().as_str().parse().unwrap();
                         ReplacementResult {
@@ -175,8 +175,8 @@ mod tests {
         let mut context = ExecutionContext {
             rules: [
                 Rule::Builtin {
-                    pattern: Regex::new(todo!("reverse")).unwrap(),
-                    replacer: |captures: &regex::Captures| {
+                    pattern: Regex::new(r"\(reverse ").unwrap(),
+                    replacer: |captures: &fancy_regex::Captures| {
                         captures.get()
                     },
                 },
