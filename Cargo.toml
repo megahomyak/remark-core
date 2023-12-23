@@ -1,5 +1,5 @@
 [package]
-name = "remarklib"
+name = "remark-core"
 version = "0.4.0"
 edition = "2021"
 description = "The core of the Remark programming language"
@@ -10,4 +10,5 @@ homepage = "https://github.com/megahomyak/remarklib"
 
 [dependencies]
 function_string_builder = "1.0.3"
+parco = "5.1.0"
 regex = "1.10.2"

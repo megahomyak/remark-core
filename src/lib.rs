@@ -1,3 +1,5 @@
+mod parser;
+
 enum SubstitutionResult {
     Success {
         new_program: String,
