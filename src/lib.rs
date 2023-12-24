@@ -1,6 +1,41 @@
 use std::collections::HashMap;
 
-// --------------------------------- BUT THIS IS GOLD VVVVVVVVVVVVVV -------------------
+fn split(s: &str) -> Option<(char, &str)> {
+    let mut chars = s.chars();
+    chars.next().map(|c| (c, chars.as_str()))
+}
+
+fn parse_char(s: &str) -> Option<(char, &str)> {
+    split(s).and_then(|(c, s)| match c {
+        ';' | '(' | ')' => None,
+        '\\' => split(s),
+    })
+}
+
+fn repeat<T, C: Extend<T>>(
+    mut container: C,
+    f: impl Fn(&str) -> Option<(T, &str)>,
+    mut s: &str,
+) -> (C, &str) {
+    while let Some((item, rest)) = f(s) {
+        container.extend(std::iter::once(item));
+        s = rest;
+    }
+    (container, s)
+}
+
+fn parse_parameter(s: &str) -> Option<(String, &str)> {
+    parse_char(s).map(|(c, s)| repeat(String::from(c), parse_char, s))
+}
+
+struct Group {
+    name: String,
+    rest: Vec<String>,
+}
+
+fn parse_group(s: &str) -> Result<(Group, &str), &str> {
+    split(s).filter(|c| c == '(').and_then(|(_, s)|)
+}
 
 pub struct ProgramSequence<Part> {
     pub first_part: Program<Part>,
@@ -72,7 +107,7 @@ impl Program<ProgramPart> {
                             Substitution::Function(function) => {
                                 let result = function(&parameters);
                                 result.substitution
-                            },
+                            }
                         })
                     } else {
                         result.push_str(substitution)
