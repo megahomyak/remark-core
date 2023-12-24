@@ -14,14 +14,17 @@ pub trait Substitution {
     fn execute(&mut self, parameters: &Parameters) -> SubstitutionResult;
 }
 
-impl<T: Fn(&Parameters) -> SubstitutionResult> Substitution for T {
+impl<T: FnMut(&Parameters) -> SubstitutionResult> Substitution for T {
     fn execute(&mut self, parameters: &Parameters) -> SubstitutionResult {
         self(parameters)
     }
 }
 
 pub enum SubstitutionAction {
-    NewSubstitution { name: String, substitution: Box<dyn Substitution> },
+    NewSubstitution {
+        name: String,
+        substitution: Box<dyn Substitution>,
+    },
 }
 
 pub struct SubstitutionResult {
@@ -29,12 +32,15 @@ pub struct SubstitutionResult {
     pub actions: Vec<SubstitutionAction>,
 }
 
-pub struct ExecutionContext {
+pub struct Executor {
     pub substitutions: HashMap<String, Box<dyn Substitution>>,
 }
 
-impl ExecutionContext {
-    fn find_group<'a>(&mut self, program: &'a str) -> Option<(&'a str, SubstitutionResult, &'a str)> {
+impl Executor {
+    fn find_group<'a>(
+        &mut self,
+        program: &'a str,
+    ) -> Option<(&'a str, SubstitutionResult, &'a str)> {
         let mut chars = program.char_indices();
         let mut opening_index = None;
         let mut group_items = Vec::new();
@@ -58,13 +64,11 @@ impl ExecutionContext {
                     let mut group_items_iter = group_items.into_iter();
                     let name = group_items_iter.next().unwrap();
                     if let Some(substitution) = self.substitutions.get_mut(&name) {
-                        let parameters = Parameters { values: group_items_iter.collect() };
+                        let parameters = Parameters {
+                            values: group_items_iter.collect(),
+                        };
                         let result = substitution.execute(&parameters);
-                        return Some((
-                            &program[..unboxed_opening_index],
-                            result,
-                            chars.as_str(),
-                        ));
+                        return Some((&program[..unboxed_opening_index], result, chars.as_str()));
                     }
                     group_items = Vec::new();
                     last_group_item = String::new();
@@ -89,5 +93,88 @@ impl ExecutionContext {
             }
         }
         program
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn find_group<'a>(
+        executor: &mut Executor,
+        program: &'a str,
+    ) -> Option<(&'a str, String, &'a str)> {
+        executor
+            .find_group(program)
+            .map(|(before, group, after)| (before, group.replacement, after))
+    }
+
+    fn executor<const N: usize>(substitutions: [(&str, Box<dyn Substitution>); N]) -> Executor {
+        Executor {
+            substitutions: HashMap::from(
+                substitutions.map(|(name, substitution)| (name.to_owned(), substitution)),
+            ),
+        }
+    }
+
+    fn create_result(replacement: impl Into<String>) -> SubstitutionResult {
+        SubstitutionResult {
+            replacement: replacement.into(),
+            actions: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn test_group_finding() {
+        let mut executor = executor([]);
+        assert_eq!(find_group(&mut executor, "abc(def;ghi)jkl"), None);
+    }
+
+    #[test]
+    fn test_group_finding_2() {
+        let mut executor = executor([(
+            "def",
+            Box::new(|_parameters: &Parameters| create_result("...")),
+        )]);
+        assert_eq!(
+            find_group(&mut executor, "abc(def;ghi)jkl"),
+            Some(("abc", "...".into(), "jkl"))
+        );
+    }
+
+    #[test]
+    fn test_group_finding_3() {
+        let mut executor = executor([(
+            "",
+            Box::new(|_parameters: &Parameters| create_result("...")),
+        )]);
+        assert_eq!(
+            find_group(&mut executor, "abc(;ghi)jkl"),
+            Some(("abc", "...".into(), "jkl"))
+        );
+    }
+
+    #[test]
+    fn test_group_finding_4() {
+        let mut executor = executor([(
+            "",
+            Box::new(|_parameters: &Parameters| create_result("...")),
+        )]);
+        assert_eq!(
+            find_group(&mut executor, "abc()jkl"),
+            Some(("abc", "...".into(), "jkl"))
+        );
+    }
+
+    #[test]
+    fn test_group_finding_5() {
+        let mut executor = executor([(
+            "",
+            Box::new(|_parameters: &Parameters| create_result("...")),
+        )]);
+        assert_eq!(
+            find_group(&mut executor, "a)(b)c(de)f()jkl"),
+            Some(("a)(b)c(de)f", "...".into(), "jkl"))
+        );
     }
 }
