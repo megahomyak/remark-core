@@ -159,4 +159,29 @@ mod tests {
             Some(("a)(b)c(de)f", "...".into(), "jkl"))
         );
     }
+
+    #[test]
+    fn test_execution() {
+        let mut executor = create_executor([]);
+        assert_eq!(executor.execute("abcdef".into()), "abcdef");
+        assert_eq!(executor.execute("abc()de(blah)f".into()), "abc()de(blah)f");
+
+        let mut executor = create_executor([(
+            "blah",
+            Box::new(|parameters: &Parameters| {
+                create_result(format!(
+                    "1:{},2:{},3:{}",
+                    parameters.get(0),
+                    parameters.get(1),
+                    parameters.get(2)
+                ))
+            }),
+        )]);
+        assert_eq!(executor.execute("abc(blah)def".into()), "abc1:,2:,3:def");
+        assert_eq!(executor.execute("abc(blah;a)def".into()), "abc1:a,2:,3:def");
+        assert_eq!(executor.execute("abc(blah;;b)def".into()), "abc1:,2:b,3:def");
+        assert_eq!(executor.execute("abc(bla)def".into()), "abc(bla)def");
+        assert_eq!(executor.execute("abc(blah;;;c)def".into()), "abc1:,2:,3:cdef");
+        assert_eq!(executor.execute("abc(blah;a;b;c)def".into()), "abc1:a,2:b,3:cdef");
+    }
 }
