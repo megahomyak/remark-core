@@ -1,50 +1,4 @@
-use std::{collections::HashMap, fmt::Display};
-
-enum Token {
-    GroupOpener,
-    GroupCloser,
-    ParameterSeparator,
-    PlainCharacter(char),
-    EscapedCharacter(char),
-}
-
-impl Token {
-    fn parse(c: char, it: &mut impl Iterator<Item = char>) -> Self {
-        match c {
-            '(' => Token::GroupOpener,
-            ')' => Token::GroupCloser,
-            ';' => Token::ParameterSeparator,
-            '\\' => match it.next() {
-                None => Token::PlainCharacter(c),
-                Some(c) => Token::EscapedCharacter(c),
-            },
-            c => Token::PlainCharacter(c),
-        }
-    }
-
-    fn repr(&self, s: &mut String) {
-        let c = match self {
-            Self::GroupOpener => '(',
-            Self::GroupCloser => ')',
-            Self::ParameterSeparator => ';',
-            Self::EscapedCharacter(c) => {
-                s.push('\\');
-                *c
-            }
-            Self::PlainCharacter(c) => *c,
-        };
-        s.push(c);
-    }
-}
-
-fn tokenize(s: &str) -> Vec<Token> {
-    let mut chars = s.chars();
-    let mut tokens = Vec::new();
-    while let Some(c) = chars.next() {
-        tokens.push(Token::parse(c, &mut chars));
-    }
-    tokens
-}
+use std::collections::HashMap;
 
 pub struct Parameters {
     values: Vec<String>,
@@ -67,7 +21,7 @@ impl<T: Fn(&Parameters) -> SubstitutionResult> Substitution for T {
 }
 
 pub enum SubstitutionAction {
-    NewSubstitution(Box<dyn Substitution>),
+    NewSubstitution { name: String, substitution: Box<dyn Substitution> },
 }
 
 pub struct SubstitutionResult {
@@ -76,22 +30,11 @@ pub struct SubstitutionResult {
 }
 
 pub struct ExecutionContext {
-    substitutions: HashMap<String, Box<dyn Substitution>>,
-}
-
-struct Group {
-    name: String,
-    parameters: Vec<String>,
-}
-
-struct FoundGroup<'a> {
-    before: &'a str,
-    group: Group,
-    after: &'a str,
+    pub substitutions: HashMap<String, Box<dyn Substitution>>,
 }
 
 impl ExecutionContext {
-    fn find_group(program: &str) -> Option<FoundGroup> {
+    fn find_group<'a>(&mut self, program: &'a str) -> Option<(&'a str, SubstitutionResult, &'a str)> {
         let mut chars = program.char_indices();
         let mut opening_index = None;
         let mut group_items = Vec::new();
@@ -106,23 +49,26 @@ impl ExecutionContext {
                 opening_index = Some(index);
                 group_items = Vec::new();
                 last_group_item = String::new();
-            } else if let Some(opening_index) = opening_index {
+            } else if let Some(unboxed_opening_index) = opening_index {
                 if c == ';' {
                     group_items.push(last_group_item);
                     last_group_item = String::new();
                 } else if c == ')' {
                     group_items.push(last_group_item);
-                    let mut group_items = group_items.into_iter();
-                    let name = group_items.next().unwrap();
-                    let parameters: Vec<String> = group_items.collect();
-                    return Some(FoundGroup {
-                        before: &program[..opening_index],
-                        group: Group {
-                            parameters,
-                            name,
-                        },
-                        after: chars.as_str(),
-                    });
+                    let mut group_items_iter = group_items.into_iter();
+                    let name = group_items_iter.next().unwrap();
+                    if let Some(substitution) = self.substitutions.get_mut(&name) {
+                        let parameters = Parameters { values: group_items_iter.collect() };
+                        let result = substitution.execute(&parameters);
+                        return Some((
+                            &program[..unboxed_opening_index],
+                            result,
+                            chars.as_str(),
+                        ));
+                    }
+                    group_items = Vec::new();
+                    last_group_item = String::new();
+                    opening_index = None;
                 } else {
                     last_group_item.push(c);
                 }
@@ -131,15 +77,17 @@ impl ExecutionContext {
         None
     }
 
-    pub fn execute(program: String) -> String {
-        let mut tokens = tokenize(&program);
-        loop {
-
+    pub fn execute(&mut self, mut program: String) -> String {
+        while let Some((before, substitution_result, after)) = self.find_group(&program) {
+            program = format!("{}{}{}", before, substitution_result.replacement, after);
+            for action in substitution_result.actions {
+                match action {
+                    SubstitutionAction::NewSubstitution { name, substitution } => {
+                        self.substitutions.insert(name, substitution);
+                    }
+                }
+            }
         }
-        let mut result = String::new();
-        for token in tokens {
-            token.repr(&mut result);
-        }
-        result
+        program
     }
 }
