@@ -109,7 +109,7 @@ mod tests {
             .map(|(before, group, after)| (before, group.replacement, after))
     }
 
-    fn executor<const N: usize>(substitutions: [(&str, Box<dyn Substitution>); N]) -> Executor {
+    fn create_executor<const N: usize>(substitutions: [(&str, Box<dyn Substitution>); N]) -> Executor {
         Executor {
             substitutions: HashMap::from(
                 substitutions.map(|(name, substitution)| (name.to_owned(), substitution)),
@@ -126,13 +126,12 @@ mod tests {
 
     #[test]
     fn test_group_finding() {
-        let mut executor = executor([]);
+        let mut executor = create_executor([]);
         assert_eq!(find_group(&mut executor, "abc(def;ghi)jkl"), None);
-    }
+        assert_eq!(find_group(&mut executor, ""), None);
+        assert_eq!(find_group(&mut executor, "abcdef"), None);
 
-    #[test]
-    fn test_group_finding_2() {
-        let mut executor = executor([(
+        let mut executor = create_executor([(
             "def",
             Box::new(|_parameters: &Parameters| create_result("...")),
         )]);
@@ -140,11 +139,8 @@ mod tests {
             find_group(&mut executor, "abc(def;ghi)jkl"),
             Some(("abc", "...".into(), "jkl"))
         );
-    }
 
-    #[test]
-    fn test_group_finding_3() {
-        let mut executor = executor([(
+        let mut executor = create_executor([(
             "",
             Box::new(|_parameters: &Parameters| create_result("...")),
         )]);
@@ -152,41 +148,13 @@ mod tests {
             find_group(&mut executor, "abc(;ghi)jkl"),
             Some(("abc", "...".into(), "jkl"))
         );
-    }
-
-    #[test]
-    fn test_group_finding_4() {
-        let mut executor = executor([(
-            "",
-            Box::new(|_parameters: &Parameters| create_result("...")),
-        )]);
         assert_eq!(
             find_group(&mut executor, "abc()jkl"),
             Some(("abc", "...".into(), "jkl"))
         );
-    }
-
-    #[test]
-    fn test_group_finding_5() {
-        let mut executor = executor([(
-            "",
-            Box::new(|_parameters: &Parameters| create_result("...")),
-        )]);
         assert_eq!(
             find_group(&mut executor, "a)(b)c(de)f()jkl"),
             Some(("a)(b)c(de)f", "...".into(), "jkl"))
         );
-    }
-
-    #[test]
-    fn test_group_finding_6() {
-        let mut executor = executor([]);
-        assert_eq!(find_group(&mut executor, ""), None);
-    }
-
-    #[test]
-    fn test_group_finding_7() {
-        let mut executor = executor([]);
-        assert_eq!(find_group(&mut executor, "abcdef"), None);
     }
 }
