@@ -109,7 +109,9 @@ mod tests {
             .map(|(before, group, after)| (before, group.replacement, after))
     }
 
-    fn create_executor<const N: usize>(substitutions: [(&str, Box<dyn Substitution>); N]) -> Executor {
+    fn create_executor<const N: usize>(
+        substitutions: [(&str, Box<dyn Substitution>); N],
+    ) -> Executor {
         Executor {
             substitutions: HashMap::from(
                 substitutions.map(|(name, substitution)| (name.to_owned(), substitution)),
