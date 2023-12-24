@@ -1,69 +1,49 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Display};
 
-fn split(s: &str) -> Option<(char, &str)> {
-    let mut chars = s.chars();
-    chars.next().map(|c| (c, chars.as_str()))
+enum Token {
+    GroupOpener,
+    GroupCloser,
+    ParameterSeparator,
+    PlainCharacter(char),
+    EscapedCharacter(char),
 }
 
-fn parse_char(s: &str) -> Option<(char, &str)> {
-    split(s).and_then(|(c, s)| match c {
-        ';' | '(' | ')' => None,
-        '\\' => split(s),
-    })
-}
-
-fn repeat<T, C: Extend<T>>(
-    mut container: C,
-    f: impl Fn(&str) -> Option<(T, &str)>,
-    mut s: &str,
-) -> (C, &str) {
-    while let Some((item, rest)) = f(s) {
-        container.extend(std::iter::once(item));
-        s = rest;
+impl Token {
+    fn parse(c: char, it: &mut impl Iterator<Item = char>) -> Self {
+        match c {
+            '(' => Token::GroupOpener,
+            ')' => Token::GroupCloser,
+            ';' => Token::ParameterSeparator,
+            '\\' => match it.next() {
+                None => Token::PlainCharacter(c),
+                Some(c) => Token::EscapedCharacter(c),
+            },
+            c => Token::PlainCharacter(c),
+        }
     }
-    (container, s)
+
+    fn repr(&self, s: &mut String) {
+        let c = match self {
+            Self::GroupOpener => '(',
+            Self::GroupCloser => ')',
+            Self::ParameterSeparator => ';',
+            Self::EscapedCharacter(c) => {
+                s.push('\\');
+                *c
+            }
+            Self::PlainCharacter(c) => *c,
+        };
+        s.push(c);
+    }
 }
 
-fn parse_parameter(s: &str) -> Option<(String, &str)> {
-    parse_char(s).map(|(c, s)| repeat(String::from(c), parse_char, s))
-}
-
-struct Group {
-    name: String,
-    rest: Vec<String>,
-}
-
-fn parse_group(s: &str) -> Result<(Group, &str), &str> {
-    split(s).filter(|c| c == '(').and_then(|(_, s)|)
-}
-
-pub struct ProgramSequence<Part> {
-    pub first_part: Program<Part>,
-    pub rest: Vec<Program<Part>>,
-}
-
-pub enum ProgramPart {
-    ProgramSequence(ProgramSequence<ProgramPart>),
-    String(String),
-}
-
-pub enum ReplacementPart {
-    ProgramSequence(ProgramSequence<ReplacementPart>),
-    String(String),
-    ReplacementMarker(String),
-}
-
-pub struct Program<Part> {
-    pub parts: Vec<Part>,
-}
-
-pub enum ContextAction {
-    AddSubstitution { name: String, content: Substitution },
-}
-
-pub struct FunctionResult {
-    pub substitution: ProgramSequence<ProgramPart>,
-    pub context_actions: Vec<ContextAction>,
+fn tokenize(s: &str) -> Vec<Token> {
+    let mut chars = s.chars();
+    let mut tokens = Vec::new();
+    while let Some(c) = chars.next() {
+        tokens.push(Token::parse(c, &mut chars));
+    }
+    tokens
 }
 
 pub struct Parameters {
@@ -71,49 +51,94 @@ pub struct Parameters {
 }
 
 impl Parameters {
-    fn get(&self, index: usize) -> &str {
+    pub fn get(&self, index: usize) -> &str {
         self.values.get(index).map(|s| &s[..]).unwrap_or("")
     }
 }
 
-pub enum Substitution {
-    String {
-        replacement: Program<ReplacementPart>,
-    },
-    Function(Box<dyn FnMut(&Parameters) -> FunctionResult>),
+pub trait Substitution {
+    fn execute(&mut self, parameters: &Parameters) -> SubstitutionResult;
 }
 
-pub struct Executor {
-    pub substitutions: HashMap<String, Substitution>,
+impl<T: Fn(&Parameters) -> SubstitutionResult> Substitution for T {
+    fn execute(&mut self, parameters: &Parameters) -> SubstitutionResult {
+        self(parameters)
+    }
 }
 
-impl Program<ProgramPart> {
-    fn execute(&self, executor: &mut Executor) -> String {
-        let mut result = String::new();
-        for part in self.parts {
-            match part {
-                ProgramPart::String(string) => result.push_str(&string),
-                ProgramPart::ProgramSequence(program_sequence) => {
-                    let name = program_sequence.first_part.execute(executor);
-                    let parameters = Parameters {
-                        values: program_sequence
-                            .rest
-                            .into_iter()
-                            .map(|part| part.execute(executor))
-                            .collect(),
-                    };
-                    if let Some(substitution) = executor.substitutions.get(name) {
-                        result.push_str(&match substitution {
-                            Substitution::Function(function) => {
-                                let result = function(&parameters);
-                                result.substitution
-                            }
-                        })
-                    } else {
-                        result.push_str(substitution)
-                    }
+pub enum SubstitutionAction {
+    NewSubstitution(Box<dyn Substitution>),
+}
+
+pub struct SubstitutionResult {
+    pub replacement: String,
+    pub actions: Vec<SubstitutionAction>,
+}
+
+pub struct ExecutionContext {
+    substitutions: HashMap<String, Box<dyn Substitution>>,
+}
+
+struct Group {
+    name: String,
+    parameters: Vec<String>,
+}
+
+struct FoundGroup<'a> {
+    before: &'a str,
+    group: Group,
+    after: &'a str,
+}
+
+impl ExecutionContext {
+    fn find_group(program: &str) -> Option<FoundGroup> {
+        let mut chars = program.char_indices();
+        let mut opening_index = None;
+        let mut group_items = Vec::new();
+        let mut last_group_item = String::new();
+        while let Some((index, c)) = chars.next() {
+            if c == '\\' {
+                match chars.next() {
+                    None => return None,
+                    Some((_index, c)) => last_group_item.push(c),
+                }
+            } else if c == '(' {
+                opening_index = Some(index);
+                group_items = Vec::new();
+                last_group_item = String::new();
+            } else if let Some(opening_index) = opening_index {
+                if c == ';' {
+                    group_items.push(last_group_item);
+                    last_group_item = String::new();
+                } else if c == ')' {
+                    group_items.push(last_group_item);
+                    let mut group_items = group_items.into_iter();
+                    let name = group_items.next().unwrap();
+                    let parameters: Vec<String> = group_items.collect();
+                    return Some(FoundGroup {
+                        before: &program[..opening_index],
+                        group: Group {
+                            parameters,
+                            name,
+                        },
+                        after: chars.as_str(),
+                    });
+                } else {
+                    last_group_item.push(c);
                 }
             }
+        }
+        None
+    }
+
+    pub fn execute(program: String) -> String {
+        let mut tokens = tokenize(&program);
+        loop {
+
+        }
+        let mut result = String::new();
+        for token in tokens {
+            token.repr(&mut result);
         }
         result
     }
