@@ -1,109 +1,188 @@
-mod parser;
+use std::collections::HashMap;
 
-enum SubstitutionResult {
-    Success {
-        new_program: String,
-        new_rule: Option<Rule>,
-    },
-    InputNotMatched,
+// --------------------------------- BUT THIS IS GOLD VVVVVVVVVVVVVV -------------------
+
+pub struct ProgramSequence<Part> {
+    pub first_part: Program<Part>,
+    pub rest: Vec<Program<Part>>,
 }
 
-pub struct ReplacementResult {
-    pub new_rule: Option<Rule>,
-    pub substitution: String,
+pub enum ProgramPart {
+    ProgramSequence(ProgramSequence<ProgramPart>),
+    String(String),
 }
 
-pub trait Replacer {
-    fn replace(&self, captures: &regex::Captures) -> ReplacementResult;
+pub enum ReplacementPart {
+    ProgramSequence(ProgramSequence<ReplacementPart>),
+    String(String),
+    ReplacementMarker(String),
 }
 
-impl<T: Fn(&regex::Captures) -> ReplacementResult> Replacer for T {
-    fn replace(&self, captures: &regex::Captures) -> ReplacementResult {
-        self(captures)
+pub struct Program<Part> {
+    pub parts: Vec<Part>,
+}
+
+pub enum ContextAction {
+    AddSubstitution { name: String, content: Substitution },
+}
+
+pub struct FunctionResult {
+    pub substitution: ProgramSequence<ProgramPart>,
+    pub context_actions: Vec<ContextAction>,
+}
+
+pub struct Parameters<'a> {
+    values: Vec<&'a str>,
+}
+
+impl<'a> Parameters<'a> {
+    fn get(&self, index: usize) -> &str {
+        self.values.get(index).unwrap_or(&"")
     }
 }
 
-pub enum Rule {
-    Regex {
-        pattern: regex::Regex,
-        replacement: String,
-    },
-    Builtin {
-        pattern: regex::Regex,
-        replacer: Box<dyn Replacer>,
-    },
+pub enum Substitution {
+    String { replacement: Program<ReplacementPart> },
+    Function(Box<dyn FnMut(&Parameters) -> FunctionResult>),
 }
 
-impl Rule {
-    fn process(&self, input: &str) -> SubstitutionResult {
-        match self {
-            Self::Regex {
-                pattern,
-                replacement,
-            } => {
-                if pattern.is_match(input) {
-                    SubstitutionResult::Success {
-                        new_program: pattern.replace(input, replacement).to_string(),
-                        new_rule: None,
+pub struct Executor {
+    pub substitutions: HashMap<String, Substitution>,
+}
+
+impl Program<ProgramPart> {
+    fn execute(&self, executor: &mut Executor) -> String {
+        let mut result = String::new();
+        for part in self.parts {
+            match part {
+                ProgramPart::String(string) => result.push_str(&string),
+                ProgramPart::ProgramSequence(program_sequence) => {
+                    let name = program_sequence.first_part.execute(executor);
+                    let parameters = Parameters { values:  }
+                    if let Some(substitution) = executor.substitutions.get(name) {
+                        match substitution {
+                            Substitution::Function(function) => function()
+                        }
+                    } else {
+                        result.push_str(substitution)
                     }
-                } else {
-                    SubstitutionResult::InputNotMatched
                 }
             }
-            Self::Builtin { pattern, replacer } => match pattern.captures(input) {
-                None => SubstitutionResult::InputNotMatched,
-                Some(captures) => {
-                    let execution_result = replacer.replace(&captures);
-                    let new_program = function_string_builder::build(|mut collector| {
-                        collector.collect(&input[..captures.get(0).unwrap().start()]);
-                        collector.collect(&execution_result.substitution);
-                        collector.collect(&input[captures.get(0).unwrap().end()..]);
-                    });
-                    SubstitutionResult::Success {
-                        new_program,
-                        new_rule: execution_result.new_rule,
+        }
+    }
+}
+
+// --------------------------------- THIS IS OLD VVVVVVVVVVVVVVVVVVV -------------------
+impl Executor {
+    pub fn execute(&mut self, mut program: String) -> String {
+        'cycle: loop {
+            let mut chars = program.char_indices();
+            program = 'substitution: loop {
+                let mut opening_index = None;
+                let mut parts = Vec::new();
+                let mut last_string_part = String::new();
+                while let Some((current_index, c)) = chars.next() {
+                    match c {
+                        '(' => {
+                            parts.clear();
+                            last_string_part.clear();
+                            opening_index = Some(current_index)
+                        }
+                        '\\' => match chars.next() {
+                            Some((_index, escaped_c)) => {
+                                if !matches!(escaped_c, '\\' | '(' | ';' | ')') {
+                                    last_string_part.push(c);
+                                }
+                                last_string_part.push(escaped_c);
+                            }
+                            None => break 'cycle,
+                        },
+                        ';' => {
+                            last_string_part.shrink_to_fit();
+                            parts.push(last_string_part);
+                            last_string_part = String::new();
+                        }
+                        ')' => {
+                            last_string_part.shrink_to_fit();
+                            parts.push(last_string_part);
+                            if let Some(opening_index) = opening_index {
+                                let mut parts_iter = parts.iter().map(|part| &part[..]);
+                                let name = parts_iter.next().unwrap_or("");
+                                let Some(substitution) = self.substitutions.get_mut(name) else {
+                                    continue 'substitution;
+                                };
+                                let parameters = Parameters {
+                                    values: parts_iter.collect(),
+                                };
+                                let substitution = match substitution {
+                                    Substitution::String { replacement } => {
+                                        let mut chars = replacement.char_indices();
+                                        let mut substitution = String::new();
+                                        let mut opening_index = None;
+                                        let mut key_name = String::new();
+                                        while let Some((current_index, c)) = chars.next() {
+                                            match c {
+                                                '$' => match opening_index {
+                                                    None => opening_index = Some(current_index),
+                                                    Some(_) => {
+                                                        opening_index = None;
+                                                        if let Ok(index) = key_name.parse() {
+                                                            substitution
+                                                                .push_str(parameters.get(index));
+                                                        };
+                                                    }
+                                                },
+                                                '\\' => match chars.next() {
+                                                    Some((_current_index, escaped_c)) => {
+                                                        if let Some(_) = opening_index {
+                                                            if !matches!(escaped_c, '$' | '\\') {
+                                                                key_name.push(c);
+                                                            }
+                                                            key_name.push(escaped_c);
+                                                        }
+                                                    }
+                                                    None => substitution.push(c),
+                                                },
+                                                _ => substitution.push(c),
+                                            }
+                                        }
+                                        substitution
+                                    }
+                                    Substitution::Function(function) => {
+                                        let result = function(&parameters);
+                                        for action in result.context_actions {
+                                            match action {
+                                                ContextAction::AddSubstitution {
+                                                    name,
+                                                    content,
+                                                } => {
+                                                    self.substitutions.insert(name, content);
+                                                }
+                                            }
+                                        }
+                                        result.substitution
+                                    }
+                                };
+                                break 'substitution format!(
+                                    "{}{}{}",
+                                    &program[..opening_index],
+                                    substitution,
+                                    chars.as_str(),
+                                );
+                            }
+                        }
+                        c => {
+                            if let Some(_) = opening_index {
+                                last_string_part.push(c)
+                            }
+                        }
                     }
                 }
-            },
-        }
-    }
-}
-
-pub struct ExecutionContext {
-    pub rules: Vec<Rule>,
-}
-
-enum MatchingStatus {
-    NoneMatched,
-    Matched { new_rule: Option<Rule> },
-}
-
-pub fn execute(context: &mut ExecutionContext, mut program: String) -> String {
-    loop {
-        let mut match_status = MatchingStatus::NoneMatched;
-        for rule in context.rules.iter().rev() {
-            match rule.process(&program) {
-                SubstitutionResult::Success {
-                    new_rule,
-                    new_program,
-                } => {
-                    match_status = MatchingStatus::Matched { new_rule };
-                    program = new_program;
-                    break;
-                }
-                SubstitutionResult::InputNotMatched => (),
+                break 'cycle;
             }
         }
-        match match_status {
-            MatchingStatus::Matched { new_rule } => {
-                if let Some(new_rule) = new_rule {
-                    context.rules.push(new_rule)
-                }
-            }
-            MatchingStatus::NoneMatched => break,
-        }
+        program
     }
-    program
 }
 
 #[cfg(test)]
