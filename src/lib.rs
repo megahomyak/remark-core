@@ -177,4 +177,16 @@ mod tests {
             Some(("a)(b)c(de)f", "...".into(), "jkl"))
         );
     }
+
+    #[test]
+    fn test_group_finding_6() {
+        let mut executor = executor([]);
+        assert_eq!(find_group(&mut executor, ""), None);
+    }
+
+    #[test]
+    fn test_group_finding_7() {
+        let mut executor = executor([]);
+        assert_eq!(find_group(&mut executor, "abcdef"), None);
+    }
 }
