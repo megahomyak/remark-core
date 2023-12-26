@@ -179,9 +179,56 @@ mod tests {
         )]);
         assert_eq!(executor.execute("abc(blah)def".into()), "abc1:,2:,3:def");
         assert_eq!(executor.execute("abc(blah;a)def".into()), "abc1:a,2:,3:def");
-        assert_eq!(executor.execute("abc(blah;;b)def".into()), "abc1:,2:b,3:def");
+        assert_eq!(
+            executor.execute("abc(blah;;b)def".into()),
+            "abc1:,2:b,3:def"
+        );
         assert_eq!(executor.execute("abc(bla)def".into()), "abc(bla)def");
-        assert_eq!(executor.execute("abc(blah;;;c)def".into()), "abc1:,2:,3:cdef");
-        assert_eq!(executor.execute("abc(blah;a;b;c)def".into()), "abc1:a,2:b,3:cdef");
+        assert_eq!(
+            executor.execute("abc(blah;;;c)def".into()),
+            "abc1:,2:,3:cdef"
+        );
+        assert_eq!(
+            executor.execute("abc(blah;a;b;c)def".into()),
+            "abc1:a,2:b,3:cdef"
+        );
+
+        let mut executor = create_executor([
+            ("a", Box::new(|_parameters: &Parameters| create_result("!"))),
+            ("b", Box::new(|_parameters: &Parameters| create_result("."))),
+            (
+                "c",
+                Box::new(|_parameters: &Parameters| create_result(")(")),
+            ),
+        ]);
+        assert_eq!(executor.execute("(a(c)b)".into()), "!.");
+    }
+
+    #[test]
+    fn test_substitution_actions() {
+        let mut executor = create_executor([
+            (
+                "define",
+                Box::new(|parameters: &Parameters| {
+                    let name = parameters.get(0).into();
+                    let replacement = parameters.get(1).to_owned();
+                    SubstitutionResult {
+                        replacement: "".into(),
+                        actions: vec![SubstitutionAction::NewSubstitution {
+                            name,
+                            substitution: Box::new(move |_parameters: &Parameters| {
+                                create_result(replacement)
+                            }),
+                        }],
+                    }
+                }),
+            ),
+            ("b", Box::new(|_parameters: &Parameters| create_result("."))),
+            (
+                "c",
+                Box::new(|_parameters: &Parameters| create_result(")(")),
+            ),
+        ]);
+        assert_eq!(executor.execute("(a(c)b)".into()), "!.");
     }
 }
